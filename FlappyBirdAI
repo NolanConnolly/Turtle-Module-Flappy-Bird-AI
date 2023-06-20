@@ -1,0 +1,308 @@
+"""
+Pseudo Code:
+
+
+Flappy bird game
+---------------
+Establish screen, main turtles, and lists
+Make a bird, but this bird needs to have gravity
+And, while this data is being developed and simulated, other things need to be moving, so how can we do this?
+there will be an infinite loop running the function Move() over and over
+the bird will be on the same vertical axis, so the y value data can be simulated and stored in a list that can be accessed every time the screen is updated
+in other words, the bird will have a predrawn path that it follows frame by frame, leaving the ability to process other things
+this path will be drawn every time the bird jumps, and the path will continue off the screen, where the bird will die
+this means that the "gravity" will just be a series of jumps with a predicted path that never stops.
+there will be an infinite loop running the function Move() over and over, each time it is ran the function moves farther down the predicted line, or moves the turtle to the first y value 
+then deletes that y value, so the next time the "first" one is the next one
+the simulation itself will be tricky
+to impliment gravity, we need to impliment downward acceleration, but with a jump we need to start by going up.
+the turtle will be set to coordinates ((same x as before), y) (where y is the y coordinate of the bird) in a loop that repeats until the y coordinate is well off the bottom of the screen
+because we have == 1, this will be a smooth movement up, and it may seem large but 12 is barely anything. 
+through each iteration of the loop, a "gravity" variable will be added to the y value, and each iteration the gravity value will be subtracted 1.
+gravity starts positive, making the bird go up, but as more and more is subtracted it starts accelerating downward. It will reach a "terminal velocity", the max speed of the turtle. 
+Next we need pipes.
+Two turtles per pipe, one on top one on bottom
+stretch them out to super long rectangles 
+bottom pipe always follows the top every time Move() happens
+they move to the left 10 pixels per update
+bottom pipe always leaves a gap, 800 pixels, as per testing
+top pipe randomly selects y value from 100 to 600
+there will be more than one set of pipes, two sets to be exact
+once the first set hits the left side of the screen, it is teleported back to the right, which should be just when the second is about at the middle
+this also increments score counter
+for collisions, they can be detected in Move() to abstract
+the actual location of the turtle inside the giant rectangles that are the pipes is very far from the edges, but we know because of the internet and the stretch values we gave them
+the exact dimensions of the rectangle and the edge's relation to the center. 
+use this to set boundaries and detect when the x and y of the bird crosses
+for death, simply reset
+---------------
+
+Bird AI
+---------------
+Heres the fun part
+The AI needs to do a couple things
+first, it needs to be able to change itself randomly when it does bad
+changing connected values until it achieves a functional ratio
+really the only information it needs is the coordinates of the upcoming bottom pipe, and it needs to stay just a bit above that
+This will help this project stay simple, since AI can get pretty out of hand
+The AI will randomly change the Y value that it jumps at, relative to the Y cor of the bottom pipe
+It will also have another changing variable, a variable that decides when it is time to move on to the next pipe
+The bird can only focus on one pipe at a time, and when it chooses to focus on the next pipe is very important
+wait too long, and you dont have enough room to fall or jump up high enough, but go too soon and you hit the pipe youre at at that second. 
+these values will change randomly 10 times, then all of those values are stored along with the scores that they produced and a new range for 
+the randomly generated values will be produced from the most successful iterations.
+---------------
+
+
+
+"""
+#imports
+import turtle as trtl
+import random
+#----------- initialize game entitites ----------------
+#basics
+GameState = True
+wn = trtl.Screen()
+wn.tracer(2)
+wn.title("FlappyBird AI")
+score = 0
+
+#bird
+Bird = trtl.Turtle()
+Bird.shape("circle")
+Bird.penup()
+
+#lists
+Future = []
+TopPipes = []
+AllPipes = []
+
+#pipes
+PipeTop1 = trtl.Turtle()
+PipeTop1.penup()
+PipeTop1.shape("square")
+PipeTop1.shapesize(stretch_len=5, stretch_wid=30) #makes dimensions of rectangle 100 across by 600 up and down 
+TopPipes.append(PipeTop1)
+AllPipes.append(PipeTop1)
+PipeBottom1 = trtl.Turtle()
+PipeBottom1.penup()
+PipeBottom1.shape("square")
+PipeBottom1.shapesize(stretch_len=5, stretch_wid=30)
+AllPipes.append(PipeBottom1)
+PipeTop2 = trtl.Turtle()
+PipeTop2.penup()
+PipeTop2.shape("square")
+PipeTop2.shapesize(stretch_len=5, stretch_wid=30)
+TopPipes.append(PipeTop2)
+AllPipes.append(PipeTop2)
+PipeBottom2 = trtl.Turtle()
+PipeBottom2.penup()
+PipeBottom2.shape("square")
+PipeBottom2.shapesize(stretch_len=5, stretch_wid=30)
+AllPipes.append(PipeBottom2)
+PipeSpeed = 1
+
+#AI values
+Ydistance = random.randint(100,500)
+jumpdelayindex = random.randint(2,200) #needs to be at least 2 or else it breaks the game
+jumpdelay = 0
+MoveOnIndex = random.randint(0,200)
+Generation = 1
+Population = 1
+BestGeneration = 0
+BestEverScore = 0
+BestEverStats = [0, 0, 0]
+YdistanceList = []
+jumpdelayindexlist = []
+MoveOnIndexList = []
+ScoreList = []
+
+#AI information display
+GenerationDisplay = trtl.Turtle()
+GenerationDisplay.penup()
+GenerationDisplay.hideturtle()
+GenerationDisplay.goto(320, 350)
+GenerationDisplay.write("Generation: " + str(Generation) + "." + str(Population), font=("Arial", 15, "normal"))
+
+VariableDisplay = trtl.Turtle()
+VariableDisplay.penup()
+VariableDisplay.hideturtle()
+VariableDisplay.goto(300, -320)
+VariableDisplay.write("Ydistance: " + str(Ydistance) + "\njumpdelayindex: " + str(jumpdelayindex) + "\nMoveOnIndex: " + str(MoveOnIndex))
+
+BestDisplay = trtl.Turtle()
+BestDisplay.penup()
+BestDisplay.hideturtle()
+BestDisplay.goto(-450, -350)
+BestDisplay.write("Best score: " + str(BestEverScore) + "\nBest Generation: " + str(BestGeneration) + "\nBest Stats:" + "\n   Ydistance: " + str(BestEverStats[0]) + "\n   jumpdelayindex: " + str(BestEverStats[1]) + "\n   MoveOnIndex: " + str(BestEverStats[2]))
+
+ScoreDisplay = trtl.Turtle()
+ScoreDisplay.penup()
+ScoreDisplay.hideturtle()
+ScoreDisplay.goto(-450, 350)
+ScoreDisplay.color("red")
+ScoreDisplay.write("Score: " + str(score), font=("Arial", 15, "normal"))
+
+
+
+
+def Jump(): 
+    #physics generated all at once, info is stored in list
+    global Future
+    Future = []
+    gravity = 2.5 
+    y = Bird.ycor()
+    while y <= (Bird.ycor() + 400) and y >= -450:
+        Future.append(y)  
+        y += gravity
+        if gravity > -3:
+            gravity -= 0.04 
+def Move():
+    global jumpdelay, jumpdelayindex, Ydistance, PipeSpeed
+    if len(Future) > 0:
+        #every time Move() is ran, position is updated based on the previously generated physics
+        Bird.goto(-200, Future[0])
+        Future.pop(0)
+    elif len(Future) == 0:
+        Bird.goto(-200, 0)
+    for pipe in TopPipes:
+        #moves pipes forward, and if it is at the left of the screen reset
+        pipe.goto(pipe.xcor() - PipeSpeed, pipe.ycor())
+        if pipe.xcor() <= -400:
+            PipeReplace(pipe) 
+    #bottom pipes follow
+    PipeBottom1.goto(PipeTop1.xcor(), PipeTop1.ycor() - 800)
+    PipeBottom2.goto(PipeTop2.xcor(), PipeTop2.ycor() - 800)
+
+    #added element of difficulty once score is too high
+    if score > 30:
+        PipeSpeed = 1.5
+    else:
+        PipeSpeed = 1
+    
+    #detect death collisions
+    for pipe in AllPipes:
+        if pipe.ycor() >= 100:
+            if Bird.ycor() > (pipe.ycor() - 300) and Bird.xcor() >= (pipe.xcor() - 50) and Bird.xcor() <= (pipe.xcor() + 50):
+                Die()
+        else:
+            if Bird.ycor() < (pipe.ycor() + 300) and Bird.xcor() >= (pipe.xcor() - 50) and Bird.xcor() <= (pipe.xcor() + 50):
+                Die()
+    if Bird.ycor() < -420:
+        Die()
+    #----------- AI ----------
+    if GameChoice == "2":
+        if jumpdelay >= jumpdelayindex:
+            
+            if PipeBottom1.xcor() > Bird.xcor() - MoveOnIndex:
+                if PipeBottom2.xcor() < Bird.xcor() or PipeBottom2.xcor() > PipeBottom1.xcor():
+                    if Bird.ycor() < (PipeBottom1.ycor() + Ydistance):
+                        Jump() 
+                        jumpdelay = 0
+            
+            if PipeBottom2.xcor() > Bird.xcor() - MoveOnIndex:
+                if PipeBottom1.xcor() < Bird.xcor() or PipeBottom1.xcor() > PipeBottom2.xcor(): 
+                    if Bird.ycor() < (PipeBottom2.ycor() + Ydistance):
+                        Jump() 
+                        jumpdelay = 0
+
+def PipeReplace(pipe):
+    global score
+    pipe.goto(400, random.randint(100,600))
+    score += 1
+    ScoreDisplay.clear()
+    ScoreDisplay.write("Score: " + str(score), font=("Arial", 15, "normal"))
+
+def Die():
+    global score
+    #reset all and update AI values if AI playing
+    PipeTop1.goto(400, random.randint(100,600))
+    PipeTop2.goto(800, random.randint(100,600))
+    Bird.goto(Bird.xcor(), 0)
+    Jump()
+    if GameChoice == "2":
+        AIupdate()
+    else:
+        score = 0
+        ScoreDisplay.clear()
+        ScoreDisplay.write("Score: " + str(score), font=("Arial", 15, "normal"))
+
+def AIupdate():
+    global jumpdelayindex, MoveOnIndex, Ydistance, Generation, Population, BestYdistance, Bestjumpdelayindex, BestMoveOnIndex, score, BestEverScore, BestGeneration, BestEverStats
+    #after each iteration, save stats
+    YdistanceList.append(Ydistance)
+    jumpdelayindexlist.append(jumpdelayindex)
+    MoveOnIndexList.append(MoveOnIndex)
+    ScoreList.append(score)
+    if Population == 20:
+        #update "best" values for this generation once at the end of the population
+        BestBird = ScoreList.index(max(ScoreList))
+        BestBirdScore = ScoreList[BestBird]
+        if Generation == 1:
+            #if this is the first generation then the Best Ever bird must be the current Best Bird
+            BestEverScore = BestBirdScore
+            BestGeneration = Generation
+            BestEverStats = [YdistanceList[BestBird], jumpdelayindexlist[BestBird], MoveOnIndexList[BestBird]]
+            BestYdistance = YdistanceList[BestBird]
+            Bestjumpdelayindex = jumpdelayindexlist[BestBird]
+            BestMoveOnIndex = MoveOnIndexList[BestBird]
+        else: #if it isnt the first Generation, check if the currently best bird beats the previously best bird, and if it does update the stats that the range is generated off of
+            if BestBirdScore > BestEverScore:
+                BestEverScore = BestBirdScore
+                BestGeneration = Generation
+                BestEverStats = [YdistanceList[BestBird], jumpdelayindexlist[BestBird], MoveOnIndexList[BestBird]]
+                BestYdistance = YdistanceList[BestBird]
+                Bestjumpdelayindex = jumpdelayindexlist[BestBird]
+                BestMoveOnIndex = MoveOnIndexList[BestBird]
+        #reset population and add one to the Generation
+        Generation = Generation + 1
+        Population = 1
+
+    else: #if the populations are still being simulated, simply add one and move on
+        Population = Population + 1
+    if Generation == 1: #first generation is simply random
+        Ydistance = random.randint(100,500)
+        jumpdelayindex = random.randint(2,200)
+        MoveOnIndex = random.randint(0,200)
+    else: #all other generations are based on the best bird at the start of the generation, range is relative to the generation number, as the generation gets higher the range gets narrower
+        Ydistance = random.randint(int(BestYdistance - (100/(Generation/2))), int(BestYdistance + (100/(Generation/2))))
+        jumpdelayindex = random.randint(int(abs(Bestjumpdelayindex - (75/(Generation/2)))), int(abs(Bestjumpdelayindex + (75/(Generation/2)))))
+        MoveOnIndex = random.randint(int(BestMoveOnIndex - (75/(Generation/2))), int(BestMoveOnIndex + (75/(Generation/2))))
+    #update displays
+    GenerationDisplay.clear()
+    GenerationDisplay.write("Generation: " + str(Generation) + "." + str(Population), font=("Arial", 15, "normal"))
+    VariableDisplay.clear()
+    VariableDisplay.write("Ydistance: " + str(Ydistance) + "\njumpdelayindex: " + str(jumpdelayindex) + "\nMoveOnIndex: " + str(MoveOnIndex))
+    BestDisplay.clear()
+    BestDisplay.write("Best score: " + str(BestEverScore) + "\nBest Generation: " + str(BestGeneration) + "\nBest Stats:" + "\n   Ydistance: " + str(BestEverStats[0]) + "\n   jumpdelayindex: " + str(BestEverStats[1]) + "\n   MoveOnIndex: " + str(BestEverStats[2]))
+    score = 0
+    ScoreDisplay.clear()
+    ScoreDisplay.write("Score: " + str(score), font=("Arial", 15, "normal"))
+
+
+
+#place entitites in correct location for beginning of game
+PipeTop1.goto(100, random.randint(100,600))
+PipeBottom1.goto(100, PipeTop1.ycor() - 800)
+PipeTop2.goto(500, random.randint(100,600))
+PipeBottom2.goto(500, PipeTop2.ycor() - 800)
+Bird.goto(-200, 0)
+Jump()
+
+#prompt user to choose to either play the game as a human or watch the AI learn to perfect the game
+while True:
+    GameChoice = input("Would you like to play the game or watch an AI learn to play? (1 for human play and 2 for AI)")
+    if GameChoice == "1":
+        GenerationDisplay.clear()
+        BestDisplay.clear()
+        VariableDisplay.clear()
+        while True:
+            wn.listen()
+            wn.onkeypress(Jump, " ")
+            Move()
+    elif GameChoice == "2":
+        while True:
+            jumpdelay += 1
+            Move()
+    else:
+        print("Please input a valid choice")
